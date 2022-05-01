@@ -2,8 +2,8 @@
   "profiles": {
     "PowerShell": {
       "commandName": "Executable",
-      "executablePath": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-      "commandLineArgs": "-noexit -command \"C:\\git\\fmad\\TestHealthChecks\\Debug.ps1\""
+      "executablePath": "powershell.exe",
+      "commandLineArgs": "-noexit -command \"$(MSBuildProjectDirectory)\\debug.ps1\""
     }
   }
 }
