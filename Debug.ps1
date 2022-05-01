@@ -17,4 +17,14 @@ if ( -not (Test-Path -Path $logFolder) ) {
 }
 $errFile = "$logFolder\Err-debug-$now.txt"
 Write-Host "Errors will be saved to $errFile"
-Test-HealthChecks -NoReturn -Urls $sites -Hostnames $hosts -HideCodes 200 -ErrorLogFile $errFile -HideDuplicates | Format-Table *
+$parms = @{
+    NoReturn        = $true
+    Urls            = $sites
+    Hostnames       = $hosts
+    HideCodes       = @(200)
+    ErrorLogFile    = $errFile
+    HideDuplicates  = $false
+    TimeoutMiliSecs = 1000
+    WaitMiliSecs    = 1000
+}
+Test-HealthChecks @parms | Format-Table *

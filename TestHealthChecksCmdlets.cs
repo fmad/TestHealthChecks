@@ -78,8 +78,8 @@ namespace TestHealthChecks
 
                     using (var finished = new CountdownEvent(1)) {
                         foreach (var test in columns) {
-                            var capture = test; // Used to capture the loop variable in the lambda expression.
-                            var url = Urls[capture].ToString();
+                            var capture  = test;  // Used to capture the loop variable in the lambda expression.
+                            var url      = Urls[capture].ToString();
                             var hostname = (null != Hostnames && Hostnames.ContainsKey(capture)) ? Hostnames[capture].ToString() : capture;
                             finished.AddCount(); // Indicate that there is another work item.
                             ThreadPool.QueueUserWorkItem(
@@ -93,7 +93,7 @@ namespace TestHealthChecks
                             );
                         }
                         finished.Signal(); // Signal that queueing is complete.
-                        finished.Wait(); // Wait for all work items to complete.
+                        finished.Wait();   // Wait for all work items to complete.
                     }
                     currentLine = "";
                     foreach (var k in columns) {
@@ -106,7 +106,7 @@ namespace TestHealthChecks
                         obj.Properties.Add(new PSNoteProperty(k.ToString(), codeTxt));
                         if (ErrorLogFile != null && codeTxt.Trim() != "" && codeTxt != "200") {
                             using (StreamWriter w = File.AppendText(ErrorLogFile)) {
-                                w.WriteLine($"{timestamp} {k.ToString()} = {codeTxt}");
+                                w.WriteLine($"{timestamp} {k} = {codeTxt}");
                             }
                         }
                     }
@@ -135,7 +135,7 @@ namespace TestHealthChecks
                     };
                 } while (repeat && !_exitRequested);
             }
-            catch (System.Management.Automation.PipelineStoppedException) {
+            catch (PipelineStoppedException) {
                 _exitRequested = true;
             }
         }
@@ -147,7 +147,7 @@ namespace TestHealthChecks
             request.Headers.Add("Hostname",Hostname);
             request.AllowAutoRedirect = false;
             request.CachePolicy = new System.Net.Cache.RequestCachePolicy(System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
-            int statusCode = 0;
+            int statusCode;
             try {
                 var response = request.GetResponse();
                 statusCode   = (int)((HttpWebResponse)response)?.StatusCode;
@@ -155,8 +155,7 @@ namespace TestHealthChecks
                 return statusCode;
             } catch (WebException e) {
                 if (e.Status == WebExceptionStatus.ProtocolError) {
-                    var response = e.Response as HttpWebResponse;
-                    if (response != null) {
+                    if (e.Response is HttpWebResponse response) {
                         return (int)response.StatusCode;
                     } else {
                         return TimeOutCode - 1; // no http status code available
