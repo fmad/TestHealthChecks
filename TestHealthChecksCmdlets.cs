@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Management.Automation;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading;
 
@@ -91,10 +92,21 @@ namespace TestHealthChecks
                                     );
                                     break;
                                 case ProtoEnum.icmp:
-                                    // Need to start a thread with an ICMP check
+                                    finished.AddCount();
+                                    ThreadPool.QueueUserWorkItem(
+                                        (state) => {
+                                            try
+                                            {
+                                                results[check.Name] = TestIcmpConnect(address);
+                                            }
+                                            finally
+                                            {
+                                                finished.Signal();
+                                            }
+                                        }, null
+                                    );
                                     break;
                                 case ProtoEnum.tcp:
-                                    // Need to start a thread with an ICMP check
                                     finished.AddCount();
                                     ThreadPool.QueueUserWorkItem(
                                         (state) => {
@@ -159,6 +171,21 @@ namespace TestHealthChecks
             }
         }
 
+        protected int TestIcmpConnect(string Address)
+        {
+            try {
+                var pingSender = new Ping();
+                var reply = pingSender.Send(Address, TimeoutMiliSecs);
+                if (reply.Status == IPStatus.Success) {
+                    return 200;
+                } else {
+                    return (int)reply.Status;
+                }
+            } catch (Exception ex) {
+                return -1;
+            }
+        }
+
         protected int TestTcpConnect(string Address, int Port) {
             TcpClient tcpClient   = new TcpClient();
             // future optimization: resolve address at startup
@@ -169,8 +196,7 @@ namespace TestHealthChecks
             if (success) {
                 tcpClient.EndConnect(result);
                 return 200;
-            } else
-            {
+            } else {
                 return -1;
             }
         }
