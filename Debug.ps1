@@ -15,6 +15,18 @@ $checks += @{
     Address = (Resolve-DnsName -Name www.google.com -Type A).IP4Address
     Hostname= 'www.google.com'
 }
+$checks += @{
+    Name    = 'T:TCP80';
+    Proto   = 'tcp';
+    Address = (Resolve-DnsName -Name www.google.com -Type A).IP4Address
+    Port    = 80;
+}
+$checks += @{
+    Name    = 'T:TCP81';
+    Proto   = 'tcp';
+    Address = (Resolve-DnsName -Name www.google.com -Type A).IP4Address
+    Port    = 81;
+}
 Write-Host "Querying:"
 $checks.Name
 $now = (Get-Date).ToString('yyyy.MM.dd-HH.mm.ss')

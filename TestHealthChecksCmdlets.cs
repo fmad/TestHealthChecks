@@ -1,11 +1,11 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Management.Automation;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 
 namespace TestHealthChecks
@@ -43,6 +43,7 @@ namespace TestHealthChecks
         public String OutputLogFile { get; set; }
 
         private const int TimeOutCode = -100;
+
         protected override void StopProcessing()
         {
             base.StopProcessing();
@@ -64,26 +65,51 @@ namespace TestHealthChecks
                 do {
                     stopWatch.Reset();
                     stopWatch.Start();
-                    var timestamp = new DateTimeOffset(DateTime.UtcNow).ToString("yyyy/MM/dd HH:mm:ss.ff");
+                    var timestamp = new DateTimeOffset(DateTime.UtcNow).ToString("yyyy/MM/dd HH:mm:ss.fff");
                     PSObject obj = new PSObject();
                     obj.Properties.Add(new PSNoteProperty("Timestamp", timestamp));
 
                     using (var finished = new CountdownEvent(1)) {
                         foreach (var test in columns) {
                             var check    = Checks.Where(x => x.Name == test).FirstOrDefault();  // Used to capture the loop variable in the lambda expression.
-                            var url      = check.Address;
+                            var address  = check.Address;
                             var proto    = check.Proto;
+                            var port     = check.Port;
                             var hostname = check.Hostname;
-                            finished.AddCount(); // Indicate that there is another work item.
-                            ThreadPool.QueueUserWorkItem(
-                                (state) => {
-                                    try {
-                                        results[check.Name] = InvokeRequest($"{proto}://{url}", hostname);
-                                    } finally {
-                                        finished.Signal(); // Signal that the work item is complete.
-                                    }
-                                }, null
-                            );
+                            switch(proto) {
+                                case ProtoEnum.http:
+                                case ProtoEnum.https:
+                                    finished.AddCount(); // Indicate that there is another work item.
+                                    ThreadPool.QueueUserWorkItem(
+                                        (state) => {
+                                            try {
+                                                results[check.Name] = InvokeRequest($"{proto}://{address}", hostname);
+                                            } finally {
+                                                finished.Signal(); // Signal that the work item is complete.
+                                            }
+                                        }, null
+                                    );
+                                    break;
+                                case ProtoEnum.icmp:
+                                    // Need to start a thread with an ICMP check
+                                    break;
+                                case ProtoEnum.tcp:
+                                    // Need to start a thread with an ICMP check
+                                    finished.AddCount();
+                                    ThreadPool.QueueUserWorkItem(
+                                        (state) => {
+                                            try
+                                            {
+                                                results[check.Name] = TestTcpConnect(address,port);
+                                            } finally {
+                                                finished.Signal();
+                                            }
+                                        }, null
+                                    );
+                                    break;
+                                default:
+                                    throw new Exception("Unhandled Protocol");
+                            }
                         }
                         finished.Signal(); // Signal that queueing is complete.
                         finished.Wait();   // Wait for all work items to complete.
@@ -133,6 +159,22 @@ namespace TestHealthChecks
             }
         }
 
+        protected int TestTcpConnect(string Address, int Port) {
+            TcpClient tcpClient   = new TcpClient();
+            // future optimization: resolve address at startup
+            IPAddress ipAddress = Dns.GetHostEntry(Address).AddressList[0];
+            IPEndPoint ipEndPoint = new IPEndPoint(ipAddress, Port);
+            var result  = tcpClient.BeginConnect(Address, Port, null, null);
+            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(TimeoutMiliSecs));
+            if (success) {
+                tcpClient.EndConnect(result);
+                return 200;
+            } else
+            {
+                return -1;
+            }
+        }
+
         protected int InvokeRequest(string URL, string Hostname)
         {
             var request = (HttpWebRequest)WebRequest.Create(URL);
@@ -169,11 +211,19 @@ namespace TestHealthChecks
         }
     }
 
+    public enum ProtoEnum
+    {
+        https = 0,
+        http,
+        icmp,
+        tcp
+    }
     public class Checks
     {
-        public string Name;
-        public string Proto;
-        public string Address;
-        public string Hostname;
+        public string    Name;
+        public string    Address;
+        public string    Hostname;
+        public int       Port;
+        public ProtoEnum Proto;
     }
 }
