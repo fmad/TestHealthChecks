@@ -4,6 +4,11 @@
       "commandName": "Executable",
       "executablePath": "powershell.exe",
       "commandLineArgs": "-noexit -command \"$(MSBuildProjectDirectory)\\debug.ps1\""
+    },
+    "pwsh": {
+      "commandName": "Executable",
+      "executablePath": "pwsh.exe",
+      "commandLineArgs": "-noexit -command \"$(MSBuildProjectDirectory)\\debug.ps1\""
     }
   }
 }
