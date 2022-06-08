@@ -112,7 +112,7 @@ namespace TestHealthChecks
                         if (repeat) {
                             if (--repeatHeader <= 0) {
                                 PSObject objH = new PSObject();
-                                objH.Properties.Add(new PSNoteProperty("Timestamp", "====/==/== ==:==:==.=="));
+                                objH.Properties.Add(new PSNoteProperty("Timestamp", "====/==/== ==:==:==.==="));
                                 foreach (var k in columns) {
                                     objH.Properties.Add(new PSNoteProperty(k.ToString(), k.ToString()));
                                 }
@@ -160,11 +160,11 @@ namespace TestHealthChecks
             var tcpClient  = new TcpClient();  // future optimization: resolve address at startup
             var ipAddress  = Dns.GetHostEntry(Address).AddressList[0];
             var ipEndPoint = new IPEndPoint(ipAddress, Port);
-            var conResult  = tcpClient.BeginConnect(Address, Port, null, null);
-            var success    = conResult.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(TimeoutMiliSecs));
+            var connection = tcpClient.BeginConnect(Address, Port, null, null);
+            var success    = connection.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(TimeoutMiliSecs));
             int result;
             if (success) {
-                tcpClient.EndConnect(conResult);
+                tcpClient.EndConnect(connection);
                 result = 0;
             } else {
                 result = -1;
@@ -208,7 +208,7 @@ namespace TestHealthChecks
                     result = -(int)e.Status; // Other exception
                 }
             } catch (Exception e2) {
-                using (StreamWriter w = File.AppendText("C:\\Debug\\err.txt")) {
+                using (StreamWriter w = File.AppendText(ErrorLogFile)) {
                     w.WriteLine(e2.Message);
                 }
                 result = TimeOutCode - 2; // Other exception
