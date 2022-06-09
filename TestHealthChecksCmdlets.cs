@@ -58,26 +58,21 @@ namespace TestHealthChecks
                     obj.Properties.Add(new PSNoteProperty("Timestamp", timestamp));
                     using (var finished = new CountdownEvent(1)) {
                         foreach (var test in columns) {
-                            var check    = Checks.Where(x => x.Name == test).FirstOrDefault();  // Used to capture the loop variable in the lambda expression.
-                            var address  = check.Address;
-                            var proto    = check.Proto;
-                            var port     = check.Port;
-                            var hostname = check.Hostname;
-                            var expected = check.Expected;
+                            var check       = Checks.Where(x => x.Name == test).FirstOrDefault();  // Used to capture the loop variable in the lambda expression.
                             finished.AddCount(); // Indicate that there is another work item.
                             ThreadPool.QueueUserWorkItem(
                                 (state) => {
                                     try {
-                                        switch (proto) {
+                                        switch (check.Proto) {
                                             case ProtoEnum.http:
                                             case ProtoEnum.https:
-                                                results[check.Name] = InvokeRequest($"{proto}://{address}", hostname, expected);
+                                                results[check.Name] = InvokeRequest($"{check.Proto}://{check.Address}", check.Hostname, check.Expected);
                                                 break;
                                             case ProtoEnum.icmp:
-                                                results[check.Name] = TestIcmpConnect(address, expected);
+                                                results[check.Name] = TestIcmpConnect(check.Address, check.Expected, check.ShowHopCount);
                                                 break;
                                             case ProtoEnum.tcp:
-                                                results[check.Name] = TestTcpConnect(address, port, expected);
+                                                results[check.Name] = TestTcpConnect(check.Address, check.Port, check.Expected);
                                                 break;
                                             case ProtoEnum.dns:
                                                 results[check.Name] = 0; // Do some DNS checks here...
@@ -123,7 +118,7 @@ namespace TestHealthChecks
                     }
                     previousLine = currentLine;
                     stopWatch.Stop();
-                    if (this.WaitMiliSecs > 0) {
+                    if (this.WaitMiliSecs > 0 && repeat) {
                         int sleep = this.WaitMiliSecs - (int)stopWatch.ElapsedMilliseconds;
                         if (sleep > 0) {
                             Thread.Sleep(sleep);
@@ -136,15 +131,32 @@ namespace TestHealthChecks
             }
         }
 
-        protected int TestIcmpConnect(string Address, List<string>Expected)
+        protected int TestIcmpConnect(string Address, List<string>Expected, bool ShowHopCount)
         {
             int result;
             try {
                 var pingSender = new Ping();
-                var reply = pingSender.Send(Address, TimeoutMiliSecs);
-                result = (int)reply.Status;
+                var ipAddress  = IPAddress.Parse(Address);
+                var reply = pingSender.Send(ipAddress, TimeoutMiliSecs);
+                switch( reply.Status )
+                {
+                    case IPStatus.Success:
+                        if (ShowHopCount) {
+                            result = (int)reply.Options.Ttl;
+                        } else {
+                            result = (int)reply.RoundtripTime;
+                        };
+                        break;
+                    case IPStatus.Unknown :
+                        result = (int)reply.Status; break;
+                    case IPStatus.TimedOut:
+                        result = 0; break;
+                    default:
+                        result = -(int)reply.Status;
+                        break;
+                }
             } catch (Exception) {
-                result = (int)IPStatus.Unknown;
+                result = -(int)IPStatus.Unknown;
             }
             if (SuccessErrorOnly && Expected?.Count > 0) {
                 if (Expected.Contains(result.ToString())) {
@@ -234,12 +246,13 @@ namespace TestHealthChecks
     }
     public class Checks
     {
-        public string        Name;
-        public string        Address;
-        public string        Hostname;
-        public string        Query;
-        public int           Port;
-        public ProtoEnum     Proto;
-        public List<string>  Expected;
+        public string        Name;         // Name of the Test
+        public string        Address;      // IP Address or Hostname to check
+        public string        Hostname;     // For HTTP(S) tests, alternative Hostname to pass
+        public string        Query;        // For HTTP(S) tests, Query string to use
+        public int           Port;         // For TCP connect tests, port number to use
+        public ProtoEnum     Proto;        // Type of check to perform
+        public List<string>  Expected;     // Expected DNS records or HTTP Codes
+        public bool          ShowHopCount; // For ICMP tests, show Hop Count instead of status
     }
 }
