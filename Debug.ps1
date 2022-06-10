@@ -19,7 +19,7 @@ if ($TestICMPOnly) {
 #        }
     }
     $checks += @{
-        Name         = "8.8.8.8"
+        Name         = "X8.8.8.8"
         Proto        = 'icmp'
         Address      = "8.8.8.8"
         ShowHopCount = $true
@@ -93,7 +93,7 @@ $parms = @{
     HideDuplicates  = $false # $true
     NoReturn        = $true
     TimeoutMiliSecs = if ($TestICMPOnly) {  900 } else {  5000 }
-    WaitMiliSecs    = if ($TestICMPOnly) { 2000 } else { 10000 }
+    WaitMiliSecs    = if ($TestICMPOnly) { 1000 } else { 10000 }
 }
 Test-HealthChecks @parms | Format-Table *
 
