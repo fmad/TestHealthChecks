@@ -41,11 +41,15 @@ namespace TestHealthChecks
             base.EndProcessing();
             var    dnsClient    = new LookupClient();
             var    stopWatch    = new Stopwatch();
-            var    results      = new ConcurrentDictionary<String, Int32>();
             bool   repeat       = NoReturn.IsPresent;
             int    repeatHeader = RepeatHeader;
             string previousLine = null; // Used with "HideDuplicates" to avoid repeating like lines and forcing good results out of screen
             string currentLine  = null; // To hold the "current" line that would be output
+            if (! String.IsNullOrEmpty(ErrorLogFile) ) {
+                Trace.AutoFlush = true;
+                Trace.Listeners.Clear();
+                Trace.Listeners.Add(new TextWriterTraceListener(@ErrorLogFile));
+            }
             var columns = Checks.Select(x => x.Name).ToList();
             columns.Sort();
             WriteVerbose($"Test-HealthChecks w/ {TimeoutMiliSecs}ms Timeout, {WaitMiliSecs}ms Wait, {(NoReturn.IsPresent ? "-NoReturn" : "")} and {columns.Count} checks to test...");
@@ -53,12 +57,15 @@ namespace TestHealthChecks
                 do {
                     stopWatch.Reset();
                     stopWatch.Start();
+                    var results   = new ConcurrentDictionary<String, Int32>();
+                    var started   = new ConcurrentDictionary<String, DateTime>();
+                    var ended     = new ConcurrentDictionary<String, DateTime>();
                     var timestamp = new DateTimeOffset(DateTime.UtcNow).ToString("yyyy/MM/dd HH:mm:ss.fff");
                     var obj       = new PSObject();
                     obj.Properties.Add(new PSNoteProperty("Timestamp", timestamp));
                     using (var finished = new CountdownEvent(1)) {
                         foreach (var test in columns) {
-                            var check       = Checks.Where(x => x.Name == test).FirstOrDefault();  // Used to capture the loop variable in the lambda expression.
+                            var check = Checks.Where(x => x.Name == test).FirstOrDefault();  // Used to capture the loop variable in the lambda expression.
                             finished.AddCount(); // Indicate that there is another work item.
                             ThreadPool.QueueUserWorkItem(
                                 (state) => {
@@ -69,6 +76,7 @@ namespace TestHealthChecks
                                                 results[check.Name] = InvokeRequest($"{check.Proto}://{check.Address}", check.Hostname, check.Expected);
                                                 break;
                                             case ProtoEnum.icmp:
+                                                started[check.Name] = DateTime.UtcNow;
                                                 results[check.Name] = TestIcmpConnect(check.Address, check.Expected, check.ShowHopCount);
                                                 break;
                                             case ProtoEnum.tcp:
@@ -92,13 +100,18 @@ namespace TestHealthChecks
                     currentLine = "";
                     foreach (var k in columns) {
                         int code = Int32.Parse(results[k].ToString());
-                        string codeTxt = code != TimeOutCode ? code.ToString() : "---";
+                        string codeTxt;
+                        if ( code == TimeOutCode ) {
+                            codeTxt = "---";
+                        } else if (SuccessErrorOnly) {
+                            codeTxt = code == 0 ? " OK " : "FAIL";
+                        } else {
+                            codeTxt = code.ToString();
+                        };
                         currentLine += (currentLine.Length > 0 ? "," : "") + codeTxt;
                         obj.Properties.Add(new PSNoteProperty(k.ToString(), codeTxt));
                         if (ErrorLogFile != null && codeTxt.Trim() != "" && codeTxt != "200") {
-                            using (StreamWriter w = File.AppendText(ErrorLogFile)) {
-                                w.WriteLine($"{timestamp} {k} = {codeTxt}");
-                            }
+                            Trace.WriteLine($"{timestamp} {k} = {codeTxt}");
                         }
                     }
                     // Return an object except if HideDuplicates && currentLine == previousLine
@@ -220,9 +233,7 @@ namespace TestHealthChecks
                     result = -(int)e.Status; // Other exception
                 }
             } catch (Exception e2) {
-                using (StreamWriter w = File.AppendText(ErrorLogFile)) {
-                    w.WriteLine(e2.Message);
-                }
+                Trace.WriteLine(e2.Message);
                 result = TimeOutCode - 2; // Other exception
             }
             if (SuccessErrorOnly && Expected?.Count > 0) {

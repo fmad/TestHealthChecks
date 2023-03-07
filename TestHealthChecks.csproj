@@ -3,7 +3,8 @@
   <PropertyGroup>
 	  <TargetFramework>netstandard2.0</TargetFramework>
 	  <AssemblyName>TestHealthChecks</AssemblyName>
-	  <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>  </PropertyGroup>
+	  <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
 
   <ItemGroup>
 	  <PackageReference Include="DnsClient" Version="1.6.0" />
