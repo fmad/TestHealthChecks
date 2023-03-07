@@ -102,7 +102,7 @@ namespace TestHealthChecks
                         int code = Int32.Parse(results[k].ToString());
                         string codeTxt;
                         if ( code == TimeOutCode ) {
-                            codeTxt = "---";
+                            codeTxt = "----";
                         } else if (SuccessErrorOnly) {
                             codeTxt = code == 0 ? " OK " : "FAIL";
                         } else {
@@ -147,6 +147,7 @@ namespace TestHealthChecks
         protected int TestIcmpConnect(string Address, List<string>Expected, bool ShowHopCount)
         {
             int result;
+            var timedOut = false;
             try {
                 var pingSender = new Ping();
                 var ipAddress  = IPAddress.Parse(Address);
@@ -163,7 +164,7 @@ namespace TestHealthChecks
                     case IPStatus.Unknown :
                         result = (int)reply.Status; break;
                     case IPStatus.TimedOut:
-                        result = 0; break;
+                        result = 0; timedOut = true; break;
                     default:
                         result = -(int)reply.Status;
                         break;
@@ -171,7 +172,9 @@ namespace TestHealthChecks
             } catch (Exception) {
                 result = -(int)IPStatus.Unknown;
             }
-            if (SuccessErrorOnly && Expected?.Count > 0) {
+            if (timedOut) {
+                result = TimeOutCode;
+            } else if (SuccessErrorOnly && Expected?.Count > 0) {
                 if (Expected.Contains(result.ToString())) {
                     result = 0;
                 } else {
@@ -236,7 +239,9 @@ namespace TestHealthChecks
                 Trace.WriteLine(e2.Message);
                 result = TimeOutCode - 2; // Other exception
             }
-            if (SuccessErrorOnly && Expected?.Count > 0) {
+            if (result == TimeOutCode) {
+                // Just return it
+            } else if (SuccessErrorOnly && Expected?.Count > 0) {
                 if (Expected.Contains(result.ToString())) {
                     result = 0;
                 } else {
